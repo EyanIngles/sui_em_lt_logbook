@@ -98,7 +98,7 @@ module test_em_logbook::test_em_logbook {
             let em_light = table::borrow(table_ref, index);
             em_light.em_id
         }
-        public entry fun get_index_via_em_id(storage: &mut Storage, em_id: String): u64 {
+        public fun get_index_via_em_id(storage: &mut Storage, em_id: String): u64 {
             let table_ref = &storage.object_info;
             let mut i = 1;
             let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
@@ -106,6 +106,24 @@ module test_em_logbook::test_em_logbook {
             let id_found = em_id; // this is what we are searching for...
 
             while(i < length || em_light.em_id == id_found) {
+                em_light = table::borrow(table_ref, i);
+                if(em_light.em_id == em_id){
+                    return i
+                };
+                i = i + 1
+            };
+                abort(UNABLE_TO_FIND_EM_ID) 
+                // if it is found, it should return before getting to the abort section.
+        }
+        /// function to get an index via using em_id and location.
+        public fun get_index_via_em_id_and_location(storage: &mut Storage, em_id: String, location: String): u64 {
+            let table_ref = &storage.object_info;
+            let mut i = 1;
+            let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
+            let length = get_table_length(storage);
+            let id_found = em_id; // this is what we are searching for...
+
+            while(i < length && em_light.em_id == id_found && em_light.location == location) {
                 em_light = table::borrow(table_ref, i);
                 if(em_light.em_id == em_id){
                     return i
