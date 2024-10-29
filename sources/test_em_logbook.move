@@ -68,7 +68,7 @@ module test_em_logbook::test_em_logbook {
 
             /// this function now does not work... because the EM_light_item is now owned by on object.
             /// we will use the ID to fecth the UID and change it that way.
-        public entry fun update_em_item(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
+        public entry fun update_em_item_via_location_and_emid(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
         let epoch = tx_context::epoch(ctx);
         
@@ -141,13 +141,15 @@ module test_em_logbook::test_em_logbook {
         table::length(&storage.object_info)
     }
     /// used for adding to a table. 
-    public fun add_em_item_to_list(storage: &mut Storage, index: u64, object_id: EM_light_item) { // may need this to ensure it is the owner.( the ctx)
+    fun add_em_item_to_list(storage: &mut Storage, index: u64, object_id: EM_light_item) { // may need this to ensure it is the owner.( the ctx)
         table::add(&mut storage.object_info, index, object_id)
     }
-    /// gets the UID of the indexed item in the table.
-    public fun get_uid_of_item(storage: &Storage, index: u64):&EM_light_item {
+    /// gets the object of the indexed item in the table.
+    public fun get_object_of_em_item(storage: &Storage, index: u64):&EM_light_item {
         table::borrow(&storage.object_info, index)
     }
+
+    /// Tests below here ///
 
     #[test]
     public fun test_getting_index_via_em_id_call() {

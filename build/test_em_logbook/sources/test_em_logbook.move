@@ -68,7 +68,7 @@ module test_em_logbook::test_em_logbook {
 
             /// this function now does not work... because the EM_light_item is now owned by on object.
             /// we will use the ID to fecth the UID and change it that way.
-        public entry fun update_em_item(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
+        public entry fun update_em_item_via_location_and_emid(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
         let epoch = tx_context::epoch(ctx);
         
