@@ -68,18 +68,20 @@ module test_em_logbook::test_em_logbook {
 
             /// this function now does not work... because the EM_light_item is now owned by on object.
             /// we will use the ID to fecth the UID and change it that way.
-        public entry fun update_em_item(em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
+        public entry fun update_em_item(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
         let epoch = tx_context::epoch(ctx);
+        
         // reassigning the values to the new updated values.
+        let table_index = get_index_via_em_id_and_location(storage, em_id, location);
+        let table_ref = &mut storage.object_info;
+        let object = table::borrow_mut(table_ref, table_index);
 
-    // need to utilise the key for the table to re assign the values
-
-
-       // em_item.signer = signer;
-       // em_item.test_time_in_minutes = test_time_in_minutes;
-       // em_item.test_pass = test_pass;
-       // em_item.date_and_time = epoch;
+        // update the table.
+        object.signature = signer;
+        object.test_time_in_minutes = test_time_in_minutes;
+        object.test_pass = test_pass;
+        object.date_and_time = epoch;
         }
 
         /// Helpers used to call and check information. /// These helpers are now useless...
@@ -154,7 +156,6 @@ module test_em_logbook::test_em_logbook {
 
     // Create test addresses representing users
     let initial_owner = @0xCAFE;
-    let final_owner = @0xFACE;
 
     // First transaction executed by initial owner to create the sword
     let mut scenario = test_scenario::begin(initial_owner);
@@ -168,7 +169,7 @@ module test_em_logbook::test_em_logbook {
         let em_id = b"em_id3".to_string();
         let em_id1 = b"em_id56".to_string();
         let em_id2 = b"em_id123".to_string();
-        let em_id3 = b"em_id59".to_string();
+
 
         create_new_em_item(school,
         location, 
