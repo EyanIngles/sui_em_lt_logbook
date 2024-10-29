@@ -107,7 +107,7 @@ module test_em_logbook::test_em_logbook {
             let length = get_table_length(storage);
             let id_found = em_id; // this is what we are searching for...
 
-            while(i < length || em_light.em_id == id_found) {
+            while(i <= length || em_light.em_id == id_found) {
                 em_light = table::borrow(table_ref, i);
                 if(em_light.em_id == em_id){
                     return i
@@ -125,7 +125,7 @@ module test_em_logbook::test_em_logbook {
             let length = get_table_length(storage);
             let id_found = em_id; // this is what we are searching for...
 
-            while(i < length && em_light.em_id == id_found && em_light.location == location) {
+            while(i <= length || (em_light.em_id == id_found && em_light.location == location)) {
                 em_light = table::borrow(table_ref, i);
                 if(em_light.em_id == em_id){
                     return i
@@ -152,9 +152,6 @@ module test_em_logbook::test_em_logbook {
     #[test]
     public fun test_getting_index_via_em_id_call() {
     use sui::test_scenario;
-
-
-    // Create test addresses representing users
     let initial_owner = @0xCAFE;
 
     // First transaction executed by initial owner to create the sword
