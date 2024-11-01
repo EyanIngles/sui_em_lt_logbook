@@ -7,6 +7,7 @@ module test_em_logbook::test_em_logbook {
 
 
     const UNABLE_TO_FIND_EM_ID:u64 = 1; // error finding item_id
+    const UNABLE_TO_FIND_SCHOOL:u64 = 2;
 
      // Define the Storage struct
     public struct Storage has key, store {
@@ -136,6 +137,47 @@ module test_em_logbook::test_em_logbook {
                 // if it is found, it should return before getting to the abort section.
         }
 
+        /// function to get an index via using school.
+        public fun get_index_via_school(storage: &mut Storage, school: String): u64 {
+            let table_ref = &storage.object_info;
+            let mut i = 1;
+            let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
+            let length = get_table_length(storage);
+            let school_found = school; // this is what we are searching for...
+
+            while(i <= length || (em_light.em_id == school_found)) {
+                em_light = table::borrow(table_ref, i);
+                if(em_light.school == school){
+                    return i
+                };
+                i = i + 1
+            };
+                abort(UNABLE_TO_FIND_SCHOOL) 
+                // if it is found, it should return before getting to the abort section.
+        }
+
+        public fun get_index_vector_via_school(storage: &mut Storage, school: String): vector<u64> {
+            let table_ref = &storage.object_info;
+            let school_string = school;
+            let mut array:vector<u64> = vector::empty();
+            let mut i = 1;
+            let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
+            let length = get_table_length(storage);
+
+            while(i <= length) {
+                em_light = table::borrow(table_ref, i);
+                if(em_light.school == school_string){
+                    array.push_back(i)
+                };
+                i = i + 1
+            };
+            if (vector::is_empty(&array)) {
+                abort(UNABLE_TO_FIND_SCHOOL)
+            };
+               return array
+                // if it is found, it should return before getting to the abort section.
+        }
+
          // gets the current length of the table so we can assign the next number on the length.
     public fun get_table_length(storage: &Storage):u64 {
         table::length(&storage.object_info)
@@ -150,6 +192,68 @@ module test_em_logbook::test_em_logbook {
     }
 
     /// Tests below here ///
+
+    #[test_only]
+    public fun INIT(ctx: &mut TxContext): Storage {
+        let init_id = object::new(ctx);
+        let storage = Storage {
+            id: init_id,  // Corrected UID creation
+            object_info: table::new(ctx),  // Initialize the table
+        };
+            storage
+    }
+    public fun create_em_items(storage: &mut Storage, runs: u64, school: String, ctx: &mut TxContext){
+        let mut i = 0;
+        let location = b"location1".to_string();
+        let em_id = b"em_id".to_string();
+        let test_time_in_minutes = 6;
+        let test_pass = true;
+        while(i < runs) {
+            create_new_em_item(school,
+             location,
+              em_id,
+               test_time_in_minutes,
+                test_pass,
+                 storage,
+                  ctx);
+
+                  i = i + 1;
+        };
+    }
+
+    #[test]
+    public fun test_call_and_receive_multiple_indexs_via_school(){
+        let mut ctx = tx_context::dummy();
+        let mut storage = INIT(&mut ctx);
+        let school = b"school".to_string();
+        let school1 = b"hawthorn".to_string();
+        let school2 = b"blob".to_string();
+        let runs1 = 100;
+        let runs2 = 25;
+        let runs3 = 50;
+
+        create_em_items(&mut storage, runs1, school, &mut ctx);
+        create_em_items(&mut storage, runs2, school1, &mut ctx);
+        create_em_items(&mut storage, runs3, school2, &mut ctx);
+
+        let table_length = get_table_length(&storage);
+        assert!(table_length == 175, 10); // error, unable to find all expected in table array length.
+
+        let array_school1 = get_index_vector_via_school(&mut storage, school);
+        let array_school_length = vector::count!(&array_school1, |_e| true);
+        assert!(array_school_length == runs1, 11); //unable to find school or expected a different number in vector.
+
+        let array_school2 = get_index_vector_via_school(&mut storage, school1);
+        let array_school_length1 = vector::count!(&array_school2, |_e| true);
+        assert!(array_school_length1 == runs2, 11); //unable to find school or expected a different number in vector.
+
+        let array_school3 = get_index_vector_via_school(&mut storage, school2);
+        let array_school_length2 = vector::count!(&array_school3, |_e| true);
+        assert!(array_school_length2 == runs3, 11); //unable to find school or expected a different number in vector.
+
+        // transferring objects to get rid of the value attached to the function.
+        transfer::share_object(storage);
+    }
 
     #[test]
     public fun test_getting_index_via_em_id_call() {
