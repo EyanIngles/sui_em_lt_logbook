@@ -1,18 +1,21 @@
-
 /// Module: test_em_logbook
 module test_em_logbook::test_em_logbook {
     use std::string::String;
     //use test_em_logbook::utils;
     use sui::table; 
+    //use sui::clock::Clock; //Clock is not needed at the moment.
 
 
     const UNABLE_TO_FIND_EM_ID:u64 = 1; // error finding item_id
     const UNABLE_TO_FIND_SCHOOL:u64 = 2;
+    const ALREADY_ACTIVE_USER:u64 = 3; // already an active user. 
+    const SIGNER_NOT_AN_ACTIVE_USER:u64 = 4; // signer who is trying to change details is not an active user, user must sign up first. 
 
      // Define the Storage struct
     public struct Storage has key, store {
         id: UID,
         object_info: table::Table<u64, EM_light_item>, 
+        active_users: table::Table<address, bool>, // calls their address and whether or not they are an active user meaning they can change the EM_light_items
     }
 
     public struct EM_light_item has key, store { // not UID because it is going to be copied to a data base styled server?
@@ -33,23 +36,32 @@ module test_em_logbook::test_em_logbook {
         let storage = Storage {
             id: init_id,  // Corrected UID creation
             object_info: table::new(ctx),  // Initialize the table
+            active_users: table::new(ctx),
         };
-
-        // transfer to the publisher:: not sure if this should be publicly shared or not.
-
-        // why it should be publicly shared:: it would make sense for anyone to add to this
-        // this would make it so that a whole organisation could use the program, i suppose these then could be separated
-        // using different package_ids;
-
-        //let owner = tx_context::sender(ctx);
+        // transfered for shared object.
         transfer::share_object(storage);
+    }
+    public fun become_an_active_user(storage: &mut Storage, ctx: &mut TxContext) {
+        let mut _tableRef = &mut storage.active_users;
+        let signer = tx_context::sender(ctx);
+        let address_check = table::contains(_tableRef, signer);
+        if(address_check == false) {
+        table::add(_tableRef, signer, true)
+        } else {
+            abort(ALREADY_ACTIVE_USER)
+        }
     }
 
     /// create a EM light item and make it a shared object.
     public entry fun create_new_em_item(school: String, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, ctx: &mut TxContext) {
         let new_id = object::new(ctx);
         let signer = tx_context::sender(ctx);
-        let epoch = tx_context::epoch(ctx);
+        let epoch = ctx.epoch_timestamp_ms(); //get the timestamp_ms for current block -- not as accurate as clock.
+        let mut _tableRef = &storage.active_users;
+        let address_check = table::contains(_tableRef, signer);
+        if(address_check == false){
+            abort(SIGNER_NOT_AN_ACTIVE_USER)
+        };
 
         let new_light_item = EM_light_item {
             id: new_id, // UID so that we can make it a shared object.
@@ -71,7 +83,11 @@ module test_em_logbook::test_em_logbook {
             /// we will use the ID to fecth the UID and change it that way.
         public entry fun update_em_item_via_location_and_emid(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
-        let epoch = tx_context::epoch(ctx);
+        let epoch = ctx.epoch_timestamp_ms();
+        let user_check = check_if_user_is_active(storage, signer);
+        if(user_check == false) {
+            abort(SIGNER_NOT_AN_ACTIVE_USER)
+        };
         
         // reassigning the values to the new updated values.
         let table_index = get_index_via_em_id_and_location(storage, em_id, location);
@@ -101,6 +117,12 @@ module test_em_logbook::test_em_logbook {
             let em_light = table::borrow(table_ref, index);
             em_light.em_id
         }
+        public fun check_if_user_is_active(storage: &mut Storage, wallet_address: address): &bool {
+            let table_ref = &storage.active_users;
+            let active_user = table::borrow(table_ref, wallet_address);
+            active_user
+        }
+
         public fun get_index_via_em_id(storage: &mut Storage, em_id: String): u64 {
             let table_ref = &storage.object_info;
             let mut i = 1;
@@ -161,12 +183,12 @@ module test_em_logbook::test_em_logbook {
             let school_string = school;
             let mut array:vector<u64> = vector::empty();
             let mut i = 1;
-            let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
+            let mut _em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
             let length = get_table_length(storage);
 
             while(i <= length) {
-                em_light = table::borrow(table_ref, i);
-                if(em_light.school == school_string){
+                _em_light = table::borrow(table_ref, i);
+                if(_em_light.school == school_string){
                     array.push_back(i)
                 };
                 i = i + 1
@@ -191,6 +213,28 @@ module test_em_logbook::test_em_logbook {
         table::borrow(&storage.object_info, index)
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     /// Tests below here ///
 
     #[test_only]
@@ -199,6 +243,7 @@ module test_em_logbook::test_em_logbook {
         let storage = Storage {
             id: init_id,  // Corrected UID creation
             object_info: table::new(ctx),  // Initialize the table
+            active_users: table::new(ctx)
         };
             storage
     }
@@ -222,6 +267,49 @@ module test_em_logbook::test_em_logbook {
     }
 
     #[test]
+    public fun test_become_active_user_and_only_call_once() {
+       use sui::test_scenario;
+    let signer = @0xCAFE;
+        let not_active_user: u64 = 55;
+
+
+    // First transaction executed by initial owner to create the sword
+    let mut scenario = test_scenario::begin(signer);
+    {
+        let mut storage = INIT(scenario.ctx());
+        become_an_active_user(&mut storage, scenario.ctx());
+
+        let is_active = check_if_user_is_active(&mut storage, signer);
+        assert!(is_active == true, not_active_user);
+        transfer::share_object(storage);
+    };
+        scenario.end();
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ALREADY_ACTIVE_USER)]
+    public fun test_EXPECT_FAIL_try_become_active_user_more_than_once () {
+        use sui::test_scenario;
+        let signer = @0xCAFE;
+        let not_active_user: u64 = 55;
+
+
+    // First transaction executed by initial owner to create the sword
+    let mut scenario = test_scenario::begin(signer);
+    {
+        let mut storage = INIT(scenario.ctx());
+        become_an_active_user(&mut storage, scenario.ctx());
+
+        let is_active = check_if_user_is_active(&mut storage, signer);
+        assert!(is_active == true, not_active_user);
+        become_an_active_user(&mut storage, scenario.ctx());
+        transfer::share_object(storage);
+    };
+        scenario.end();
+    }
+
+
+    #[test]
     public fun test_call_and_receive_multiple_indexs_via_school(){
         let mut ctx = tx_context::dummy();
         let mut storage = INIT(&mut ctx);
@@ -231,6 +319,9 @@ module test_em_logbook::test_em_logbook {
         let runs1 = 100;
         let runs2 = 25;
         let runs3 = 50;
+
+        // becoming an active user;
+        become_an_active_user(&mut storage, &mut ctx);
 
         create_em_items(&mut storage, runs1, school, &mut ctx);
         create_em_items(&mut storage, runs2, school1, &mut ctx);
@@ -266,12 +357,16 @@ module test_em_logbook::test_em_logbook {
         let mut storage = Storage {
             id: object::new(scenario.ctx()),
             object_info: table::new(scenario.ctx()), 
+            active_users: table::new(scenario.ctx())
         };
         let school = b"school".to_string();
         let location = b"location".to_string();
         let em_id = b"em_id3".to_string();
         let em_id1 = b"em_id56".to_string();
         let em_id2 = b"em_id123".to_string();
+
+        // calling to become an active user.
+        become_an_active_user(&mut storage, scenario.ctx());
 
 
         create_new_em_item(school,

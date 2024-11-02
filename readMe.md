@@ -12,7 +12,7 @@ lets fix that with blockchain, store data with someone signing a bundle or one i
  location: String, // the location of where the EM is located.
  test_time_in_minutes: u64, // the time tested 90mins is regs
  test_pass: bool, // did the test pass or fail.
- date_and_time: u64, // use epoch values and convert them, this will be stamped on once the item has been created.
+ date_and_time_ms: u64, // use epoch values and convert them, this will be stamped on once the item has been created.
  }
 ```
 
