@@ -1,4 +1,4 @@
-import { setOther } from "../store/betting_store"
+import { setOther } from "../store/item_store"
 
 export const loadOther = async (dispatch) => {
     let packageString = "setup 1 is here";

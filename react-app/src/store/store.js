@@ -1,9 +1,9 @@
 import { configureStore } from '@reduxjs/toolkit'
-import betting from './betting_store'
+import packageInfo from './item_store'
 
 export const store = configureStore({
   reducer: {
-    betting,
+    packageInfo,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

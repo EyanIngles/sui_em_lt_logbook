@@ -3,19 +3,32 @@ module test_em_logbook::test_em_logbook {
     use std::string::String;
     //use test_em_logbook::utils;
     use sui::table; 
+    use sui::balance::{Self, Balance};
+    use sui::sui::{SUI};
+    use sui::coin::{Self, Coin};
     //use sui::clock::Clock; //Clock is not needed at the moment.
 
+    // constants that are for the fee amounts;    REF:: 1000000000 mist == 1 sui tokens
+    const BECOME_AN_ACTIVE_USER_FEE_AMOUNT:u64 = 2000000000; //2 sui tokens
+    const ACTIVITY_FEE:u64 = 100000000; // 0.1 sui token
 
     const UNABLE_TO_FIND_EM_ID:u64 = 1; // error finding item_id
     const UNABLE_TO_FIND_SCHOOL:u64 = 2;
     const ALREADY_ACTIVE_USER:u64 = 3; // already an active user. 
     const SIGNER_NOT_AN_ACTIVE_USER:u64 = 4; // signer who is trying to change details is not an active user, user must sign up first. 
+    const INSUFFICIENT_FUNDS_AVAILABLE:u64 = 5; // user does not have enough finds to run this command.
 
      // Define the Storage struct
     public struct Storage has key, store {
         id: UID,
         object_info: table::Table<u64, EM_light_item>, 
         active_users: table::Table<address, bool>, // calls their address and whether or not they are an active user meaning they can change the EM_light_items
+    }
+
+    public struct Pay_pool has key, store {
+        id: UID,
+        balance: Balance<SUI>,
+        owner: address
     }
 
     public struct EM_light_item has key, store { // not UID because it is going to be copied to a data base styled server?
@@ -40,16 +53,41 @@ module test_em_logbook::test_em_logbook {
         };
         // transfered for shared object.
         transfer::share_object(storage);
+        // create pay_pool struct.
+        let pay_pool = Pay_pool { //TODO not really a pool but a direct transfer to the owner.
+            id: object::new(ctx),
+            balance: balance::zero(),
+            owner: tx_context::sender(ctx)
+        };
+        transfer::share_object(pay_pool)
     }
     public fun become_an_active_user(storage: &mut Storage, ctx: &mut TxContext) {
         let mut _tableRef = &mut storage.active_users;
         let signer = tx_context::sender(ctx);
         let address_check = table::contains(_tableRef, signer);
         if(address_check == false) {
+            
         table::add(_tableRef, signer, true)
         } else {
             abort(ALREADY_ACTIVE_USER)
         }
+    }
+//TODO: once this is ready to be used after testing, this pay_fee function should non-public and be called from other functions..
+    public fun pay_fee(pay_pool: &Pay_pool, balance: &mut Coin<SUI>, fee_amount: u64, ctx: &mut TxContext) {
+        // make it so user can pay fee here, then we will need to add this fee_pay to the become an active user with an larger amount and then 
+        // add it to each other function but have it as a smaller fee.
+        // fee for create active user should be something like 2 sui tokens
+        // fee for other function usage should be something like 0.1 sui.
+        // these fees will then go into the pool and only the owner can withdraw...
+        let recipient = pay_pool.owner;
+
+        let wallet_balance = coin::value(balance);
+        if(wallet_balance < fee_amount) {
+            abort(INSUFFICIENT_FUNDS_AVAILABLE)
+        };
+        let fee_transfer = coin::split(balance, fee_amount, ctx);
+        transfer::public_transfer(fee_transfer, recipient);
+
     }
 
     /// create a EM light item and make it a shared object.
@@ -78,9 +116,7 @@ module test_em_logbook::test_em_logbook {
         // storage: &mut Storage, index: u64, object_id: UID, _ctx: &mut TxContext
             //TODO: got new_id to use for emitting an event to keep track of
         }
-
-            /// this function now does not work... because the EM_light_item is now owned by on object.
-            /// we will use the ID to fecth the UID and change it that way.
+           
         public entry fun update_em_item_via_location_and_emid(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
         let epoch = ctx.epoch_timestamp_ms();
