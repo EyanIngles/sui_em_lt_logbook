@@ -24,3 +24,15 @@ for quick ptb calling when creating a new em list
 ```
 
 object ID = 
+
+
+
+testing: 
+paypool: 
+storage: 
+package: 
+
+
+coin: 
+
+add format for testing: \"school\" \"location\" \"em\" 90 true 

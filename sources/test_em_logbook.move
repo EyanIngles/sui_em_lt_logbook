@@ -10,7 +10,7 @@ module test_em_logbook::test_em_logbook {
 
     // constants that are for the fee amounts;    REF:: 1000000000 mist == 1 sui tokens
     const BECOME_AN_ACTIVE_USER_FEE_AMOUNT:u64 = 2000000000; //2 sui tokens
-    const ACTIVITY_FEE:u64 = 100000000; // 0.1 sui token
+    const ACTIVITY_FEE:u64 = 50000000; // 0.05 sui token
 
     const UNABLE_TO_FIND_EM_ID:u64 = 1; // error finding item_id
     const UNABLE_TO_FIND_SCHOOL:u64 = 2;
@@ -61,37 +61,22 @@ module test_em_logbook::test_em_logbook {
         };
         transfer::share_object(pay_pool)
     }
-    public fun become_an_active_user(storage: &mut Storage, ctx: &mut TxContext) {
+    public fun become_an_active_user(pay_pool: &mut Pay_pool, balance: &mut Coin<SUI>, storage: &mut Storage, ctx: &mut TxContext) { //TODO need to add in coin and payPool as param
+    // and parse in the pay_fee function which will 
         let mut _tableRef = &mut storage.active_users;
         let signer = tx_context::sender(ctx);
         let address_check = table::contains(_tableRef, signer);
         if(address_check == false) {
-            
+            pay_fee(pay_pool, balance, BECOME_AN_ACTIVE_USER_FEE_AMOUNT, ctx); // pay the fee to be added into the table so become a user.
         table::add(_tableRef, signer, true)
         } else {
             abort(ALREADY_ACTIVE_USER)
         }
     }
-//TODO: once this is ready to be used after testing, this pay_fee function should non-public and be called from other functions..
-    public fun pay_fee(pay_pool: &Pay_pool, balance: &mut Coin<SUI>, fee_amount: u64, ctx: &mut TxContext) {
-        // make it so user can pay fee here, then we will need to add this fee_pay to the become an active user with an larger amount and then 
-        // add it to each other function but have it as a smaller fee.
-        // fee for create active user should be something like 2 sui tokens
-        // fee for other function usage should be something like 0.1 sui.
-        // these fees will then go into the pool and only the owner can withdraw...
-        let recipient = pay_pool.owner;
-
-        let wallet_balance = coin::value(balance);
-        if(wallet_balance < fee_amount) {
-            abort(INSUFFICIENT_FUNDS_AVAILABLE)
-        };
-        let fee_transfer = coin::split(balance, fee_amount, ctx);
-        transfer::public_transfer(fee_transfer, recipient);
-
-    }
-
-    /// create a EM light item and make it a shared object.
-    public entry fun create_new_em_item(school: String, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, ctx: &mut TxContext) {
+    
+    
+    public entry fun create_new_em_item(school: String, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, balance: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext) {
+        //TODO: need to make this function take the coin param and pay the fee for creating a new item, the smaller fee amount.
         let new_id = object::new(ctx);
         let signer = tx_context::sender(ctx);
         let epoch = ctx.epoch_timestamp_ms(); //get the timestamp_ms for current block -- not as accurate as clock.
@@ -111,24 +96,26 @@ module test_em_logbook::test_em_logbook {
             test_pass, // did the test pass or fail.
             date_and_time: epoch, // use epoch values and convert them, this will be stamped on once the item has been created.
         };
+        pay_fee(pay_pool, balance, ACTIVITY_FEE, ctx); // fee for use of the system.
         let next_index = get_table_length(storage) + 1;
         add_em_item_to_list(storage, next_index, new_light_item);
         // storage: &mut Storage, index: u64, object_id: UID, _ctx: &mut TxContext
             //TODO: got new_id to use for emitting an event to keep track of
         }
-           
-        public entry fun update_em_item_via_location_and_emid(storage: &mut Storage, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool,  ctx: &mut TxContext) {
+                                                                 
+        public entry fun update_em_item_via_location_and_emid(location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, balance: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
         let epoch = ctx.epoch_timestamp_ms();
         let user_check = check_if_user_is_active(storage, signer);
         if(user_check == false) {
             abort(SIGNER_NOT_AN_ACTIVE_USER)
         };
-        
         // reassigning the values to the new updated values.
         let table_index = get_index_via_em_id_and_location(storage, em_id, location);
         let table_ref = &mut storage.object_info;
         let object = table::borrow_mut(table_ref, table_index);
+
+        pay_fee(pay_pool, balance, ACTIVITY_FEE, ctx); // fee for use of the system.
 
         // update the table.
         object.signature = signer;
@@ -137,7 +124,9 @@ module test_em_logbook::test_em_logbook {
         object.date_and_time = epoch;
         }
 
-        /// Helpers used to call and check information. /// These helpers are now useless...
+            /////////////////////// CHECKERS ///////////////////////////////////////////////
+            ////////////////////////////////////////////////////////////////////////////////
+    
         public entry fun check_school(storage: &Storage, index: u64): String {
             let table_ref = &storage.object_info;
             let em_light = table::borrow(table_ref, index);
@@ -153,13 +142,16 @@ module test_em_logbook::test_em_logbook {
             let em_light = table::borrow(table_ref, index);
             em_light.em_id
         }
-        public fun check_if_user_is_active(storage: &mut Storage, wallet_address: address): &bool {
+        public fun check_if_user_is_active(storage: &Storage, wallet_address: address): bool {
             let table_ref = &storage.active_users;
             let active_user = table::borrow(table_ref, wallet_address);
-            active_user
+            *active_user
         }
 
-        public fun get_index_via_em_id(storage: &mut Storage, em_id: String): u64 {
+        /////////////////////// GETTERS ////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+
+        public fun get_index_via_em_id(storage: &Storage, em_id: String): u64 {
             let table_ref = &storage.object_info;
             let mut i = 1;
             let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
@@ -177,7 +169,7 @@ module test_em_logbook::test_em_logbook {
                 // if it is found, it should return before getting to the abort section.
         }
         /// function to get an index via using em_id and location.
-        public fun get_index_via_em_id_and_location(storage: &mut Storage, em_id: String, location: String): u64 {
+        public fun get_index_via_em_id_and_location(storage: &Storage, em_id: String, location: String): u64 {
             let table_ref = &storage.object_info;
             let mut i = 1;
             let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
@@ -196,7 +188,7 @@ module test_em_logbook::test_em_logbook {
         }
 
         /// function to get an index via using school.
-        public fun get_index_via_school(storage: &mut Storage, school: String): u64 {
+        public fun get_index_via_school(storage: &Storage, school: String): u64 {
             let table_ref = &storage.object_info;
             let mut i = 1;
             let mut em_light = table::borrow(table_ref, i); // run at 0 and continue to go through table.
@@ -214,7 +206,7 @@ module test_em_logbook::test_em_logbook {
                 // if it is found, it should return before getting to the abort section.
         }
 
-        public fun get_index_vector_via_school(storage: &mut Storage, school: String): vector<u64> {
+        public fun get_index_vector_via_school(storage: &Storage, school: String): vector<u64> {
             let table_ref = &storage.object_info;
             let school_string = school;
             let mut array:vector<u64> = vector::empty();
@@ -241,9 +233,6 @@ module test_em_logbook::test_em_logbook {
         table::length(&storage.object_info)
     }
     /// used for adding to a table. 
-    fun add_em_item_to_list(storage: &mut Storage, index: u64, object_id: EM_light_item) { // may need this to ensure it is the owner.( the ctx)
-        table::add(&mut storage.object_info, index, object_id)
-    }
     /// gets the object of the indexed item in the table.
     public fun get_object_of_em_item(storage: &Storage, index: u64):&EM_light_item {
         table::borrow(&storage.object_info, index)
@@ -251,6 +240,28 @@ module test_em_logbook::test_em_logbook {
 
 
 
+    /////////////////////// internal function calls /////////////////////////////////
+    /// ////////////////////////////////////////////////////////////////////////////
+    
+    fun pay_fee(pay_pool: &mut Pay_pool, balance: &mut Coin<SUI>, fee_amount: u64, ctx: &mut TxContext) {
+        // make it so user can pay fee here, then we will need to add this fee_pay to the become an active user with an larger amount and then 
+        // add it to each other function but have it as a smaller fee.
+        // fee for create active user should be something like 2 sui tokens
+        // fee for other function usage should be something like 0.1 sui.
+        // these fees will then go into the pool and only the owner can withdraw...
+
+        let wallet_balance = coin::value(balance);
+        if(wallet_balance < fee_amount) {
+            abort(INSUFFICIENT_FUNDS_AVAILABLE)
+        };
+        let fee_transfer = coin::split(balance, fee_amount, ctx);
+        let mut _fee_into_balance = coin::into_balance(fee_transfer);
+        balance::join(&mut pay_pool.balance, _fee_into_balance);
+    }
+
+    fun add_em_item_to_list(storage: &mut Storage, index: u64, object_id: EM_light_item) { // may need this to ensure it is the owner.( the ctx)
+        table::add(&mut storage.object_info, index, object_id)
+    }
 
 
 
@@ -274,6 +285,7 @@ module test_em_logbook::test_em_logbook {
     /// Tests below here ///
 
     #[test_only]
+
     public fun INIT(ctx: &mut TxContext): Storage {
         let init_id = object::new(ctx);
         let storage = Storage {
@@ -283,7 +295,18 @@ module test_em_logbook::test_em_logbook {
         };
             storage
     }
-    public fun create_em_items(storage: &mut Storage, runs: u64, school: String, ctx: &mut TxContext){
+    public fun INIT_PAYPOOL(ctx: &mut TxContext): Pay_pool {
+        let init_id = object::new(ctx);
+        let signer = tx_context::sender(ctx);
+        let pay_pool = Pay_pool {
+            id: init_id,
+            balance: balance::zero(),
+            owner: signer
+        };
+            pay_pool
+    }
+    public fun create_em_items(storage: &mut Storage, runs: u64, school: String, sui_coin: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext){
+     //TODO: need to add the new paypool, coin and storage params to make this test work.
         let mut i = 0;
         let location = b"location1".to_string();
         let em_id = b"em_id".to_string();
@@ -295,9 +318,10 @@ module test_em_logbook::test_em_logbook {
               em_id,
                test_time_in_minutes,
                 test_pass,
-                 storage,
+                 storage, 
+         sui_coin,
+         pay_pool,
                   ctx);
-
                   i = i + 1;
         };
     }
@@ -305,6 +329,7 @@ module test_em_logbook::test_em_logbook {
     #[test]
     public fun test_become_active_user_and_only_call_once() {
        use sui::test_scenario;
+
     let signer = @0xCAFE;
         let not_active_user: u64 = 55;
 
@@ -313,19 +338,26 @@ module test_em_logbook::test_em_logbook {
     let mut scenario = test_scenario::begin(signer);
     {
         let mut storage = INIT(scenario.ctx());
-        become_an_active_user(&mut storage, scenario.ctx());
+        let mut pay_pool = INIT_PAYPOOL(scenario.ctx());
+        // create sui token for testing.
+        let mut sui_coin = coin::mint_for_testing<SUI>(1000000000000000, scenario.ctx());
+        become_an_active_user(&mut pay_pool, &mut sui_coin, &mut storage, scenario.ctx());
 
-        let is_active = check_if_user_is_active(&mut storage, signer);
+        let is_active = check_if_user_is_active(&storage, signer);
         assert!(is_active == true, not_active_user);
         transfer::share_object(storage);
+        transfer::public_share_object(sui_coin);
+        transfer::public_share_object(pay_pool);
     };
         scenario.end();
     }
+    
 
     #[test]
     #[expected_failure(abort_code = ALREADY_ACTIVE_USER)]
     public fun test_EXPECT_FAIL_try_become_active_user_more_than_once () {
         use sui::test_scenario;
+
         let signer = @0xCAFE;
         let not_active_user: u64 = 55;
 
@@ -334,12 +366,18 @@ module test_em_logbook::test_em_logbook {
     let mut scenario = test_scenario::begin(signer);
     {
         let mut storage = INIT(scenario.ctx());
-        become_an_active_user(&mut storage, scenario.ctx());
+        let mut pay_pool = INIT_PAYPOOL(scenario.ctx());
+        // create sui token for testing.
+        let mut sui_coin = coin::mint_for_testing<SUI>(1000000000000000, scenario.ctx());
 
-        let is_active = check_if_user_is_active(&mut storage, signer);
+        become_an_active_user(&mut pay_pool, &mut sui_coin, &mut storage, scenario.ctx());
+
+        let is_active = check_if_user_is_active(&storage, signer);
         assert!(is_active == true, not_active_user);
-        become_an_active_user(&mut storage, scenario.ctx());
+        become_an_active_user(&mut pay_pool, &mut sui_coin, &mut storage, scenario.ctx());
         transfer::share_object(storage);
+        transfer::public_share_object(sui_coin);
+        transfer::public_share_object(pay_pool);
     };
         scenario.end();
     }
@@ -347,6 +385,10 @@ module test_em_logbook::test_em_logbook {
 
     #[test]
     public fun test_call_and_receive_multiple_indexs_via_school(){
+        use sui::test_scenario;
+
+        let address1 = @0xA;
+
         let mut ctx = tx_context::dummy();
         let mut storage = INIT(&mut ctx);
         let school = b"school".to_string();
@@ -356,36 +398,50 @@ module test_em_logbook::test_em_logbook {
         let runs2 = 25;
         let runs3 = 50;
 
+        let mut scenario = test_scenario::begin(address1); {
         // becoming an active user;
-        become_an_active_user(&mut storage, &mut ctx);
-
-        create_em_items(&mut storage, runs1, school, &mut ctx);
-        create_em_items(&mut storage, runs2, school1, &mut ctx);
-        create_em_items(&mut storage, runs3, school2, &mut ctx);
+        let mut pay_pool = INIT_PAYPOOL(&mut ctx);
+        // create sui token for testing.
+        let mut sui_coin = coin::mint_for_testing<SUI>(1000000000000000, scenario.ctx());
+        become_an_active_user(&mut pay_pool, &mut sui_coin, &mut storage, &mut ctx);
+         
+        create_em_items(&mut storage, runs1, school, &mut sui_coin, &mut pay_pool, &mut ctx);
+        create_em_items(&mut storage, runs2, school1, &mut sui_coin, &mut pay_pool, &mut ctx);
+        create_em_items(&mut storage, runs3, school2, &mut sui_coin, &mut pay_pool, &mut ctx);
 
         let table_length = get_table_length(&storage);
         assert!(table_length == 175, 10); // error, unable to find all expected in table array length.
 
-        let array_school1 = get_index_vector_via_school(&mut storage, school);
+        let array_school1 = get_index_vector_via_school(&storage, school);
         let array_school_length = vector::count!(&array_school1, |_e| true);
         assert!(array_school_length == runs1, 11); //unable to find school or expected a different number in vector.
 
-        let array_school2 = get_index_vector_via_school(&mut storage, school1);
+        let array_school2 = get_index_vector_via_school(&storage, school1);
         let array_school_length1 = vector::count!(&array_school2, |_e| true);
         assert!(array_school_length1 == runs2, 11); //unable to find school or expected a different number in vector.
 
-        let array_school3 = get_index_vector_via_school(&mut storage, school2);
+        let array_school3 = get_index_vector_via_school(&storage, school2);
         let array_school_length2 = vector::count!(&array_school3, |_e| true);
         assert!(array_school_length2 == runs3, 11); //unable to find school or expected a different number in vector.
 
         // transferring objects to get rid of the value attached to the function.
         transfer::share_object(storage);
+        transfer::public_share_object(sui_coin);
+        transfer::public_share_object(pay_pool);
+    };
+        scenario.end();
     }
 
     #[test]
     public fun test_getting_index_via_em_id_call() {
-    use sui::test_scenario;
-    let initial_owner = @0xCAFE;
+        use sui::test_scenario; 
+        use sui::coin::{mint};
+    let initial_owner = @0xA;
+    let school = b"school".to_string();
+        let location = b"location".to_string();
+        let em_id = b"em_id3".to_string();
+        let em_id1 = b"em_id56".to_string();
+        let em_id2 = b"em_id123".to_string();
 
     // First transaction executed by initial owner to create the sword
     let mut scenario = test_scenario::begin(initial_owner);
@@ -395,49 +451,61 @@ module test_em_logbook::test_em_logbook {
             object_info: table::new(scenario.ctx()), 
             active_users: table::new(scenario.ctx())
         };
-        let school = b"school".to_string();
-        let location = b"location".to_string();
-        let em_id = b"em_id3".to_string();
-        let em_id1 = b"em_id56".to_string();
-        let em_id2 = b"em_id123".to_string();
+        // create sui token for testing.
+        let mut sui_coin = coin::mint_for_testing<SUI>(1000000000000000, scenario.ctx());
 
         // calling to become an active user.
-        become_an_active_user(&mut storage, scenario.ctx());
-
-
+        let mut pay_pool = INIT_PAYPOOL(scenario.ctx());
+        
+        become_an_active_user(&mut pay_pool, &mut sui_coin, &mut storage, scenario.ctx());
+            
         create_new_em_item(school,
         location, 
         em_id,
          90, 
          true,
-         &mut storage, scenario.ctx());
+         &mut storage, 
+         &mut sui_coin,
+         &mut pay_pool,
+         scenario.ctx());
          create_new_em_item(school,
         location, 
         em_id1,
          90, 
          true,
-         &mut storage, scenario.ctx());
+         &mut storage, 
+         &mut sui_coin,
+         &mut pay_pool,
+          scenario.ctx());
          create_new_em_item(school,
         location, 
         em_id2,
          90, 
          true,
-         &mut storage, scenario.ctx());
+         &mut storage, 
+         &mut sui_coin,
+         &mut pay_pool,
+         scenario.ctx());
          create_new_em_item(school,
         location, 
         em_id2,
          90, 
          true,
-         &mut storage, scenario.ctx());
+         &mut storage, 
+         &mut sui_coin,
+         &mut pay_pool,
+          scenario.ctx());
 
-         let number = get_index_via_em_id(&mut storage, em_id1);
+         let number = get_index_via_em_id(&storage, em_id1);
          assert!(number == 2, 69); // un able to find the em_id if error
-         let number1 = get_index_via_em_id(&mut storage, em_id);
+         let number1 = get_index_via_em_id(&storage, em_id);
          assert!(number1 == 1, 70); // un able to find the em_id if error
-         let number2 = get_index_via_em_id(&mut storage, em_id2);
+         let number2 = get_index_via_em_id(&storage, em_id2);
          assert!(number2 == 3, 71); // un able to find the em_id if error
 
-        transfer::share_object(storage)
+        transfer::public_transfer(sui_coin, initial_owner);
+        transfer::public_share_object(pay_pool);
+        transfer::public_share_object(storage);
     };
         scenario.end();
     }
