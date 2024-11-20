@@ -6,7 +6,6 @@ module test_em_logbook::test_em_logbook {
     use sui::balance::{Self, Balance};
     use sui::sui::{SUI};
     use sui::coin::{Self, Coin};
-    //use sui::clock::Clock; //Clock is not needed at the moment.
 
     // constants that are for the fee amounts;    REF:: 1000000000 mist == 1 sui tokens
     const BECOME_AN_ACTIVE_USER_FEE_AMOUNT:u64 = 2000000000; //2 sui tokens
@@ -54,15 +53,17 @@ module test_em_logbook::test_em_logbook {
         // transfered for shared object.
         transfer::share_object(storage);
         // create pay_pool struct.
-        let pay_pool = Pay_pool { //TODO not really a pool but a direct transfer to the owner.
+        let pay_pool = Pay_pool {
             id: object::new(ctx),
             balance: balance::zero(),
             owner: tx_context::sender(ctx)
         };
         transfer::share_object(pay_pool)
     }
-    public fun become_an_active_user(pay_pool: &mut Pay_pool, balance: &mut Coin<SUI>, storage: &mut Storage, ctx: &mut TxContext) { //TODO need to add in coin and payPool as param
-    // and parse in the pay_fee function which will 
+    public fun become_an_active_user(pay_pool: &mut Pay_pool, balance: &mut Coin<SUI>, storage: &mut Storage, ctx: &mut TxContext) { 
+        //TODO need to add in coin and payPool as param
+        // and parse in the pay_fee function which will 
+
         let mut _tableRef = &mut storage.active_users;
         let signer = tx_context::sender(ctx);
         let address_check = table::contains(_tableRef, signer);
@@ -75,7 +76,7 @@ module test_em_logbook::test_em_logbook {
     }
     
     
-    public entry fun create_new_em_item(school: String, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, balance: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext) {
+    public fun create_new_em_item(school: String, location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, balance: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext) {
         //TODO: need to make this function take the coin param and pay the fee for creating a new item, the smaller fee amount.
         let new_id = object::new(ctx);
         let signer = tx_context::sender(ctx);
@@ -103,7 +104,7 @@ module test_em_logbook::test_em_logbook {
             //TODO: got new_id to use for emitting an event to keep track of
         }
                                                                  
-        public entry fun update_em_item_via_location_and_emid(location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, balance: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext) {
+        public fun update_em_item_via_location_and_emid(location: String, em_id: String, test_time_in_minutes: u64, test_pass: bool, storage: &mut Storage, balance: &mut Coin<SUI>, pay_pool: &mut Pay_pool, ctx: &mut TxContext) {
         let signer = tx_context::sender(ctx);
         let epoch = ctx.epoch_timestamp_ms();
         let user_check = check_if_user_is_active(storage, signer);
@@ -127,17 +128,17 @@ module test_em_logbook::test_em_logbook {
             /////////////////////// CHECKERS ///////////////////////////////////////////////
             ////////////////////////////////////////////////////////////////////////////////
     
-        public entry fun check_school(storage: &Storage, index: u64): String {
+        public fun check_school(storage: &Storage, index: u64): String {
             let table_ref = &storage.object_info;
             let em_light = table::borrow(table_ref, index);
             em_light.school
         }
-        public entry fun check_location(storage: &Storage, index: u64): String {
+        public fun check_location(storage: &Storage, index: u64): String {
             let table_ref = &storage.object_info;
             let em_light = table::borrow(table_ref, index);
             em_light.location
         }
-        public entry fun check_em_id(storage: &Storage, index: u64): String {
+        public fun check_em_id(storage: &Storage, index: u64): String {
             let table_ref = &storage.object_info;
             let em_light = table::borrow(table_ref, index);
             em_light.em_id
@@ -435,7 +436,7 @@ module test_em_logbook::test_em_logbook {
     #[test]
     public fun test_getting_index_via_em_id_call() {
         use sui::test_scenario; 
-        use sui::coin::{mint};
+    
     let initial_owner = @0xA;
     let school = b"school".to_string();
         let location = b"location".to_string();
@@ -509,4 +510,6 @@ module test_em_logbook::test_em_logbook {
     };
         scenario.end();
     }
+
+    
 }
